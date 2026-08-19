@@ -28,11 +28,11 @@ The module replaces these portions of the batch flow:
 
 Character fields are decoded and encoded with the JDK `IBM037` charset,
 without trimming leading zeroes or trailing spaces. The module's local
-signed-zoned codec validates the five leading `F0`-`F9` magnitude bytes and
-the positive `C0`-`C9`, negative `D0`-`D9`, or unsigned `F0`-`F9` final
-overpunch byte. Record encoding preserves all 28 filler bytes verbatim, so a
-decode/encode cycle is physically byte-exact. `decodeAll` rejects any input
-whose length is not a multiple of 50.
+signed-zoned codec validates five leading `F0`-`F9` zoned digits and the
+positive `C0`-`C9`, negative `D0`-`D9`, or unsigned `F0`-`F9` final byte,
+whose low nibble is the sixth digit. Record encoding preserves all 28 filler
+bytes verbatim, so a decode/encode cycle is physically byte-exact.
+`decodeAll` rejects any input whose length is not a multiple of 50.
 
 The read model indexes records by the 16-byte composite key. Its reader
 returns a two-character COBOL file status and optional record. The resolver
@@ -66,10 +66,10 @@ fixture has:
 * four category codes: `0001` through `0004`;
 * 51 positive rate overpunches ending in `x'C0'`, and every filler is 28
   bytes of `x'F0'`;
-* only the distinct rates 1.50, 2.50, and 0.00.
+* only the distinct rates 0.00, 15.00, and 25.00.
 
-Pinned rows include `A000000000|01|0001` = 1.50,
-`A000000000|01|0002` = 2.50, `DEFAULT   |01|0002` = 2.50,
+Pinned rows include `A000000000|01|0001` = 15.00,
+`A000000000|01|0002` = 25.00, `DEFAULT   |01|0002` = 25.00,
 `DEFAULT   |02|0001` = 0.00, and
 `ZEROAPR   |07|0001` = 0.00. Each of the three groups contains the same
 17 `(type, category)` pairs:
@@ -90,6 +90,12 @@ at `:464-467` is `(TRAN-CAT-BAL * DIS-INT-RATE) / 1200`, with no `ROUNDED`;
 the implementation therefore divides with scale 2 and `RoundingMode.DOWN`,
 which is truncation toward zero, and accumulates at scale 2. The accumulator
 has an explicit reset corresponding to `MOVE 0 TO WS-TOTAL-INT` at `:200`.
+
+Finding: `DIS-INT-RATE PIC S9(04)V99` is four integer plus two decimal
+digits, with the sign overpunched onto the final digit byte. Therefore
+`f0f0f1f5f0c0` is digits `001500`, or `+0015.00` = 15.00 percent. The
+upstream brief's claim of "`+0150.00` → 1.50 percent" was wrong on both
+counts: it is internally inconsistent and does not match the byte layout.
 
 The caller's `IF DIS-INT-RATE NOT = 0` at `app/cbl/CBACT04C.cbl:214` is
 modeled as `shouldComputeInterest(rate)` and is covered by a test. This
@@ -112,7 +118,7 @@ Other findings:
 * All three fixture groups have the same key set. Therefore a `'23'` to
   DEFAULT fallback cannot be reached using a group id present in this
   fixture; `B000000000|01|0002` demonstrates the real DEFAULT row and its
-  2.50 rate using a group id that would come from the account file, not this
+  25.00 rate using a group id that would come from the account file, not this
   file. A pair absent from both groups, such as `05|0002`, produces the
   default-read error outcome.
 * The FD's coarse X(34) data view and the typed copybook view describe the

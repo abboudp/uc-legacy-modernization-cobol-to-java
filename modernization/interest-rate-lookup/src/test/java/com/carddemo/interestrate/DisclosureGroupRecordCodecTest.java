@@ -1,6 +1,7 @@
 package com.carddemo.interestrate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,7 +42,7 @@ class DisclosureGroupRecordCodecTest {
                 records.stream().map(DisclosureGroupRecord::disTranCatCd).collect(Collectors.toSet()));
         assertTrue(records.stream().allMatch(r -> r.disIntRate().scale() == 2));
         assertTrue(records.stream().allMatch(r -> Set.of(
-                new BigDecimal("0.00"), new BigDecimal("1.50"), new BigDecimal("2.50"))
+                new BigDecimal("0.00"), new BigDecimal("15.00"), new BigDecimal("25.00"))
                 .contains(r.disIntRate())));
     }
 
@@ -49,7 +50,10 @@ class DisclosureGroupRecordCodecTest {
     void fixtureRatesAndFillersHaveExpectedSignBytes() throws Exception {
         byte[] fixture = FixtureSupport.read(FixtureSupport.fixture());
         List<DisclosureGroupRecord> records = DisclosureGroupRecordCodec.decodeAll(fixture);
-        assertEquals(new BigDecimal("1.50"), records.get(0).disIntRate());
+        assertArrayEquals(new byte[] {
+                (byte) 0xF0, (byte) 0xF0, (byte) 0xF1, (byte) 0xF5, (byte) 0xF0, (byte) 0xC0
+        }, java.util.Arrays.copyOfRange(fixture, 16, 22));
+        assertEquals(new BigDecimal("15.00"), records.get(0).disIntRate());
         assertEquals("A000000000", records.get(0).disAcctGroupId());
         assertEquals("01", records.get(0).disTranTypeCd());
         assertEquals("0001", records.get(0).disTranCatCd());
@@ -58,16 +62,23 @@ class DisclosureGroupRecordCodecTest {
             assertTrue(java.util.Arrays.stream(toUnsigned(records.get(index).filler()))
                     .allMatch(value -> value == 0xF0));
         }
-        assertEquals(new BigDecimal("2.50"), find(records, "A000000000", "01", "0002").disIntRate());
+        assertEquals(new BigDecimal("25.00"), find(records, "A000000000", "01", "0002").disIntRate());
         assertEquals(new BigDecimal("0.00"), find(records, "DEFAULT   ", "02", "0001").disIntRate());
         assertEquals(new BigDecimal("0.00"), find(records, "ZEROAPR   ", "07", "0001").disIntRate());
     }
 
     @Test
     void SYNTHETICNegativeOverpunchRoundTrips() {
-        byte[] encoded = SignedZonedDecimalCodec.encode(new BigDecimal("-12.34"));
-        assertEquals((byte) 0xD4, encoded[5]);
-        assertEquals(new BigDecimal("-12.34"), SignedZonedDecimalCodec.decode(encoded, 0));
+        byte[] positive = SignedZonedDecimalCodec.encode(new BigDecimal("12.34"));
+        byte[] negative = SignedZonedDecimalCodec.encode(new BigDecimal("-12.34"));
+        assertArrayEquals(new byte[] {
+                (byte) 0xF0, (byte) 0xF0, (byte) 0xF1, (byte) 0xF2, (byte) 0xF3, (byte) 0xC4
+        }, positive);
+        assertArrayEquals(new byte[] {
+                (byte) 0xF0, (byte) 0xF0, (byte) 0xF1, (byte) 0xF2, (byte) 0xF3, (byte) 0xD4
+        }, negative);
+        assertEquals(new BigDecimal("12.34"), SignedZonedDecimalCodec.decode(positive, 0));
+        assertEquals(new BigDecimal("-12.34"), SignedZonedDecimalCodec.decode(negative, 0));
     }
 
     @Test

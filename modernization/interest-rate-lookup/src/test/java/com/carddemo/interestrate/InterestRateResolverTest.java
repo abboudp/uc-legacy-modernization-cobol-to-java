@@ -24,7 +24,7 @@ class InterestRateResolverTest {
     void directHitReturnsRate() {
         InterestRateResolution result = resolver.resolve(new DisclosureGroupKey("A000000000", "01", "0001"));
         assertEquals(ResolutionPath.DIRECT_HIT, result.path());
-        assertEquals(Optional.of(new BigDecimal("1.50")), result.rate());
+        assertEquals(Optional.of(new BigDecimal("15.00")), result.rate());
         assertEquals(List.of("00"), result.fileStatuses());
         assertTrue(result.displayMessages().isEmpty());
     }
@@ -33,7 +33,7 @@ class InterestRateResolverTest {
     void fallbackUsesDefaultRowAfterStatus23() {
         InterestRateResolution result = resolver.resolve(new DisclosureGroupKey("B000000000", "01", "0002"));
         assertEquals(ResolutionPath.DEFAULT_FALLBACK, result.path());
-        assertEquals(Optional.of(new BigDecimal("2.50")), result.rate());
+        assertEquals(Optional.of(new BigDecimal("25.00")), result.rate());
         assertEquals(List.of("23", "00"), result.fileStatuses());
         assertEquals(List.of("DISCLOSURE GROUP RECORD MISSING", "TRY WITH DEFAULT GROUP CODE"),
                 result.displayMessages());
@@ -89,7 +89,7 @@ class InterestRateResolverTest {
         // CBACT04C.cbl:437 replaces only FD-DIS-ACCT-GROUP-ID.
         DisclosureGroupKey requested = new DisclosureGroupKey("B000000000", "01", "0002");
         InterestRateResolution result = resolver.resolve(requested);
-        assertEquals(Optional.of(new BigDecimal("2.50")), result.rate());
+        assertEquals(Optional.of(new BigDecimal("25.00")), result.rate());
         assertEquals(Optional.of(new BigDecimal("0.00")),
                 resolver.resolve(new DisclosureGroupKey("DEFAULT   ", "02", "0001")).rate());
     }
@@ -97,9 +97,9 @@ class InterestRateResolverTest {
     @Test
     void effectiveDefaultKeyIsSpacePaddedAtLine437() {
         // CBACT04C.cbl:437 moves seven chars into PIC X(10), yielding 'DEFAULT   '.
-        assertEquals(Optional.of(new BigDecimal("2.50")),
+        assertEquals(Optional.of(new BigDecimal("25.00")),
                 resolver.resolve(new DisclosureGroupKey("B000000000", "01", "0002")).rate());
-        assertEquals(Optional.of(new BigDecimal("2.50")),
+        assertEquals(Optional.of(new BigDecimal("25.00")),
                 readModel.read(new DisclosureGroupKey("DEFAULT   ", "01", "0002")).record()
                         .map(DisclosureGroupRecord::disIntRate));
     }

@@ -11,7 +11,7 @@ public final class SignedZonedDecimalCodec {
     }
 
     public static BigDecimal decode(byte[] bytes, int offset) {
-        if (bytes == null || offset < 0 || offset + 6 > (bytes == null ? 0 : bytes.length)) {
+        if (bytes == null || offset < 0 || offset > bytes.length - 6) {
             throw new IllegalArgumentException("S9(04)V99 requires six bytes at offset " + offset);
         }
         int magnitude = 0;
@@ -31,6 +31,7 @@ public final class SignedZonedDecimalCodec {
         } else {
             throw invalidByte(last, offset + 5);
         }
+        magnitude = magnitude * 10 + (last & 0x0F);
         BigDecimal value = BigDecimal.valueOf(magnitude, 2);
         return negative ? value.negate() : value;
     }
@@ -45,12 +46,13 @@ public final class SignedZonedDecimalCodec {
         } catch (ArithmeticException exception) {
             throw new IllegalArgumentException("S9(04)V99 value must have scale no greater than 2: " + value, exception);
         }
-        if (scaled.abs().compareTo(BigDecimal.valueOf(999.99)) > 0) {
-            throw new IllegalArgumentException("Signed-zoned rate exceeds five encodable magnitude digits: " + value);
+        if (scaled.abs().compareTo(BigDecimal.valueOf(9999.99)) > 0) {
+            throw new IllegalArgumentException("S9(04)V99 value exceeds four integer digits: " + value);
         }
         int magnitude = scaled.movePointRight(2).abs().intValueExact();
         byte[] encoded = new byte[6];
         int trailingDigit = magnitude % 10;
+        magnitude /= 10;
         for (int index = 4; index >= 0; index--) {
             encoded[index] = (byte) (0xF0 + magnitude % 10);
             magnitude /= 10;
