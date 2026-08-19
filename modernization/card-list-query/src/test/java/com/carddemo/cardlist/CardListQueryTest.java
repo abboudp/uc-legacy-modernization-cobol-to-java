@@ -93,9 +93,12 @@ class CardListQueryTest {
             anchor = page.lastAnchor().cardNumber();
         }
         assertEquals(8, pages.size());
-        assertEquals(50, 7 * 7 + 1);
-        assertEquals(1, pages.get(7).rows().stream().filter(row -> row != null).count());
-        assertEquals(6, pages.get(7).rows().stream().filter(row -> row == null).count());
+        int fullPages = pages.size() - 1;
+        long lastPageRows = pages.get(pages.size() - 1).rows().stream()
+                .filter(row -> row != null).count();
+        assertEquals(fixtureRecords().size(), 7 * fullPages + lastPageRows);
+        assertEquals(1, lastPageRows);
+        assertEquals(6, pages.get(pages.size() - 1).rows().stream().filter(row -> row == null).count());
         for (int i = 0; i < pages.size(); i++) {
             assertEquals(i < 7, pages.get(i).nextPageExists());
         }
@@ -109,9 +112,10 @@ class CardListQueryTest {
         CardListPager pager = new CardListPager(new CardMaster(fixtureBytes()));
         List<CardListPage> forward = forwardPages(pager);
         for (int i = forward.size() - 1; i > 0; i--) {
-            CardListPage backwards = pager.readBackwards(forward.get(i).firstAnchor().cardNumber(),
+            CardListPage backwards = pager.readBackwards(forward.get(i).firstAnchor(),
                     CardListFilters.none(), i + 1);
             assertEquals(forward.get(i - 1).rows(), backwards.rows());
+            assertEquals(forward.get(i).firstAnchor(), backwards.lastAnchor());
         }
     }
 
@@ -120,7 +124,7 @@ class CardListQueryTest {
         CardListPager pager = new CardListPager(new CardMaster(fixtureBytes()));
         CardListPage first = pager.readForward("", CardListFilters.none(), 0);
         CardListPage second = pager.readForward(first.lastAnchor().cardNumber(), CardListFilters.none(), 1);
-        CardListPage roundTrip = pager.readBackwards(second.firstAnchor().cardNumber(),
+        CardListPage roundTrip = pager.readBackwards(second.firstAnchor(),
                 CardListFilters.none(), 2);
         assertEquals(first.rows(), roundTrip.rows());
         assertEquals(first.firstAnchor(), roundTrip.firstAnchor());
@@ -168,16 +172,26 @@ class CardListQueryTest {
     }
 
     /**
-     * COCRDLIC.cbl:1361-1368 reports file error when the backward loop reaches file start.
+     * COCRDLIC.cbl:1361-1368 reports file error at file start; :153-172 assembles
+     * fixed-width WS-FILE-ERROR-MESSAGE and :117 truncates it to 75 characters.
      */
     @Test
     void backwardOffStartReportsGenericFileError() throws Exception {
         CardRecord first = fixtureRecords().get(0);
         CardListPager pager = new CardListPager(new CardMaster(fixtureBytes()));
-        CardListPage page = pager.readBackwards(first.cardNumber(), CardListFilters.none(), 2);
-        assertEquals("File Error:READ on CARDFILE", page.errorMessage());
+        CardListPage page = pager.readBackwards(new CardAnchor(first.cardNumber(), "invented"),
+                CardListFilters.none(), 2);
+        assertEquals("File Error: READ     on CARDDAT   returned RESP           ,RESP2           ",
+                page.errorMessage());
+        assertEquals(75, page.errorMessage().length());
         assertEquals(first.cardNumber(), page.firstAnchor().cardNumber());
+        assertEquals("invented", page.firstAnchor().accountId());
+        assertEquals("invented", page.lastAnchor().accountId());
         assertTrue(page.rows().stream().allMatch(row -> row == null));
+        CardAnchor beyondEnd = new CardAnchor("9999999999999999", "caller-acct");
+        CardListPage unpositioned = pager.readBackwards(beyondEnd, CardListFilters.none(), 2);
+        assertEquals(page.errorMessage(), unpositioned.errorMessage());
+        assertEquals(beyondEnd, unpositioned.lastAnchor());
     }
 
     /**
@@ -188,7 +202,9 @@ class CardListQueryTest {
         List<CardRecord> records = IntStream.rangeClosed(1, 8)
                 .mapToObj(i -> record(String.format("%016d", i), String.format("%011d", i), "Y")).toList();
         CardListPager pager = new CardListPager(new CardMaster(records));
-        CardListPage page = pager.readBackwards("0000000000000008", CardListFilters.none(), 2);
+        CardListPage page = pager.readBackwards(
+                new CardAnchor("0000000000000008", "00000000008"),
+                CardListFilters.none(), 2);
         assertEquals(7, page.rows().stream().filter(row -> row != null).count());
         assertFalse(page.rows().stream().filter(row -> row != null)
                 .anyMatch(row -> row.cardNumber().equals("0000000000000008")));
@@ -239,6 +255,12 @@ class CardListQueryTest {
         assertEquals("0000000000000000", blank.cardNumber());
         CardListInputEditor.InputEditResult low = editor.edit("\0".repeat(11), "\0".repeat(16));
         assertEquals(CardListInputEditor.FilterFlag.BLANK, low.accountFilter());
+        CardListInputEditor.InputEditResult partialSpaces = editor.edit("123        ", "");
+        assertEquals(CardListInputEditor.FilterFlag.NOT_OK, partialSpaces.accountFilter());
+        assertEquals("ACCOUNT FILTER,IF SUPPLIED MUST BE A 11 DIGIT NUMBER",
+                partialSpaces.errorMessage());
+        CardListInputEditor.InputEditResult shortSpaces = editor.edit("   ", "");
+        assertEquals(CardListInputEditor.FilterFlag.BLANK, shortSpaces.accountFilter());
         CardListInputEditor.InputEditResult invalid = editor.edit("12A", "12B");
         assertFalse(invalid.inputOk());
         assertEquals(CardListInputEditor.FilterFlag.NOT_OK, invalid.accountFilter());
@@ -281,6 +303,9 @@ class CardListQueryTest {
         assertTrue(outcome.displayLines().isEmpty());
     }
 
+    /**
+     * CBACT02C.cbl:154-158 abends directly, so 9000-CARDFILE-CLOSE is not reached.
+     */
     @Test
     void batchReaderReportsInjectedOpenReadCloseAndNineStatuses() {
         CardFileBatchReader.BatchOutcome open = new CardFileBatchReader(new StubIo("37",
@@ -288,18 +313,23 @@ class CardListQueryTest {
         assertTrue(open.abended());
         assertEquals(List.of("ERROR OPENING CARDFILE", "ABENDING PROGRAM"), open.displayLines());
 
-        CardFileBatchReader.BatchOutcome read = new CardFileBatchReader(new StubIo("00",
-                List.of(new CardFileBatchReader.ReadResult("37", null)), "00")).readAll();
+        StubIo readIo = new StubIo("00",
+                List.of(new CardFileBatchReader.ReadResult("37", null)), "00");
+        CardFileBatchReader.BatchOutcome read = new CardFileBatchReader(readIo).readAll();
         assertEquals(12, read.applResult());
         assertEquals(List.of("ERROR READING CARDFILE", "FILE STATUS IS: 0037",
                 "ABENDING PROGRAM"), read.displayLines());
+        assertEquals(0, readIo.closeCalls());
         CardFileBatchReader.BatchOutcome read92 = new CardFileBatchReader(new StubIo("00",
                 List.of(new CardFileBatchReader.ReadResult("92", null)), "00")).readAll();
-        assertEquals("FILE STATUS IS: 9050", read92.displayLines().get(1));
+        assertEquals("FILE STATUS IS: 9242", read92.displayLines().get(1));
 
         CardFileBatchReader.BatchOutcome nine = new CardFileBatchReader(new StubIo("00",
                 List.of(new CardFileBatchReader.ReadResult("9x", null)), "00")).readAll();
-        assertEquals("FILE STATUS IS: 9120", nine.displayLines().get(1));
+        assertEquals("FILE STATUS IS: 9167", nine.displayLines().get(1));
+        CardFileBatchReader.BatchOutcome nonNumericFirst = new CardFileBatchReader(new StubIo("00",
+                List.of(new CardFileBatchReader.ReadResult("Ax", null)), "00")).readAll();
+        assertEquals("FILE STATUS IS: A167", nonNumericFirst.displayLines().get(1));
 
         CardFileBatchReader.BatchOutcome close = new CardFileBatchReader(new StubIo("00",
                 List.of(new CardFileBatchReader.ReadResult("10", null)), "35")).readAll();
@@ -385,6 +415,7 @@ class CardListQueryTest {
         private final List<CardFileBatchReader.ReadResult> reads;
         private final String close;
         private int index;
+        private int closeCalls;
 
         private StubIo(String open, List<CardFileBatchReader.ReadResult> reads, String close) {
             this.open = open;
@@ -404,7 +435,12 @@ class CardListQueryTest {
 
         @Override
         public String close() {
+            closeCalls++;
             return close;
+        }
+
+        private int closeCalls() {
+            return closeCalls;
         }
     }
 }

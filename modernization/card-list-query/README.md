@@ -58,6 +58,21 @@ the dictionary agrees at `DATA_DICTIONARY.md:56-67`.
   (`COCRDLIC.cbl:1291-1307`) and reports the assembled generic file error at
   beginning-of-file because its second loop has no ENDFILE branch
   (`:1361-1368`).
+  If STARTBR cannot be positioned because the anchor is above the keyset,
+  this port returns the same file-error page: the COBOL does not check the
+  STARTBR RESP (`:1271-1279`), and the first READPREV consequently reaches
+  the WHEN OTHER path.
+* The file-error text is assembled from the fixed-width
+  `WS-FILE-ERROR-MESSAGE` group (`COCRDLIC.cbl:153-172`) and then truncated
+  to `WS-ERROR-MSG PIC X(75)` (`:117`).  Its file field is `CARDDAT` from
+  `LIT-CARD-FILE` (`:213-214`), not `CARDFILE`; RESP and RESP2 remain spaces
+  because this port has no CICS RESP codes.
+* `9910-DISPLAY-IO-STATUS` uses the CP037/EBCDIC byte value of the status
+  character when taking its binary-to-decimal branch
+  (`CBACT02C.cbl:161-173`), rather than the Java/ASCII character value.
+* Read abends return immediately after `9999-ABEND-PROGRAM`
+  (`CBACT02C.cbl:154-158`); the close paragraph is not reached, so no close
+  is attempted after a read failure.
 * Screen number increments only when it is zero (`COCRDLIC.cbl:1177-1178`).
 * `previousPageExists` is derived from `screenNum > 1`, corresponding to
   `CA-FIRST-PAGE` and the PF7 check (`COCRDLIC.cbl:238`, `:440-445`, `:903`).

@@ -30,14 +30,18 @@ public final class CardListInputEditor {
 
     private static FieldResult classify(String raw, int width) {
         String zeroes = "0".repeat(width);
-        if (raw == null || raw.equals("\0".repeat(width))
-                || raw.equals(" ".repeat(width)) || raw.equals(zeroes)) {
+        if (raw == null || raw.isEmpty() || allOf(raw, ' ') || allOf(raw, '\0')
+                || raw.equals(zeroes)) {
             return new FieldResult(FilterFlag.BLANK, zeroes);
         }
         if (raw.length() == width && raw.chars().allMatch(Character::isDigit)) {
             return new FieldResult(FilterFlag.ISVALID, raw);
         }
         return new FieldResult(FilterFlag.NOT_OK, zeroes);
+    }
+
+    private static boolean allOf(String value, char expected) {
+        return value.chars().allMatch(character -> character == expected);
     }
 
     private record FieldResult(FilterFlag flag, String value) {

@@ -9,7 +9,7 @@ public final class CardListPager {
     private static final int PAGE_SIZE = 7;
     private static final String NO_MORE = "NO MORE RECORDS TO SHOW";
     private static final String NO_RECORDS = "NO RECORDS FOUND FOR THIS SEARCH CONDITION.";
-    private static final String FILE_ERROR = "File Error:READ on CARDFILE";
+    private static final String FILE_ERROR = fileErrorMessage();
 
     private final CardMaster master;
 
@@ -65,15 +65,16 @@ public final class CardListPager {
         return finish(rows, first, last, next, resultingScreen, message, count);
     }
 
-    public CardListPage readBackwards(String firstAnchorCardNum, CardListFilters filters, int screenNum) {
+    public CardListPage readBackwards(CardAnchor firstAnchor, CardListFilters filters, int screenNum) {
         List<CardListRow> rows = blankRows();
-        CardAnchor first = anchorForKey(firstAnchorCardNum);
+        CardAnchor first = Objects.requireNonNull(firstAnchor, "firstAnchor");
         CardAnchor last = first;
         int counter = PAGE_SIZE + 1;
         boolean next = true;
         Map.Entry<String, CardRecord> positioned = master.ceilingEntry(
-                firstAnchorCardNum == null ? "" : firstAnchorCardNum);
-        Map.Entry<String, CardRecord> discarded = positioned == null ? master.lastEntry() : positioned;
+                firstAnchor.cardNumber());
+        // COCRDLIC.cbl:1271-1279 does not check STARTBR RESP; failed positioning reaches READPREV WHEN OTHER.
+        Map.Entry<String, CardRecord> discarded = positioned;
         if (discarded == null) {
             return errorPage(rows, first, last, next, screenNum);
         }
@@ -113,14 +114,6 @@ public final class CardListPager {
         return new CardListPage(rows, first, last, next, screenNum > 1, screenNum, FILE_ERROR, false);
     }
 
-    private CardAnchor anchorForKey(String key) {
-        if (key == null) {
-            return CardAnchor.empty();
-        }
-        Map.Entry<String, CardRecord> entry = master.ceilingEntry(key);
-        return entry == null ? CardAnchor.empty() : anchor(entry.getValue());
-    }
-
     private static List<CardListRow> blankRows() {
         List<CardListRow> rows = new ArrayList<>(PAGE_SIZE);
         for (int i = 0; i < PAGE_SIZE; i++) {
@@ -144,5 +137,22 @@ public final class CardListPager {
 
     private static CardAnchor anchor(CardRecord record) {
         return new CardAnchor(record.cardNumber(), record.cardAcctId());
+    }
+
+    private static String fileErrorMessage() {
+        String message = fixed("File Error:", 12)
+                + fixed("READ", 8)
+                + " on "
+                + fixed("CARDDAT ", 9)
+                + " returned RESP "
+                + " ".repeat(10)
+                + ",RESP2 "
+                + " ".repeat(10)
+                + " ".repeat(5);
+        return message.substring(0, 75);
+    }
+
+    private static String fixed(String value, int width) {
+        return (value + " ".repeat(width)).substring(0, width);
     }
 }

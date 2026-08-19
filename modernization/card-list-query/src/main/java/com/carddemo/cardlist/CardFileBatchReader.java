@@ -1,11 +1,12 @@
 package com.carddemo.cardlist;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.nio.charset.Charset;
 
 public final class CardFileBatchReader {
+    private static final Charset EBCDIC = Charset.forName("IBM037");
     public interface CardFileIo {
         String open();
         ReadResult readNext();
@@ -77,7 +78,7 @@ public final class CardFileBatchReader {
                 displays.add("ABENDING PROGRAM");
                 applResult = 12;
                 abended = true;
-                break;
+                return new BatchOutcome(records, terminalStatus, applResult, abended, displays);
             }
         }
 
@@ -108,7 +109,8 @@ public final class CardFileBatchReader {
         }
         char first = status.charAt(0);
         char second = status.length() > 1 ? status.charAt(1) : 0;
-        return first + String.format("%03d", (int) second);
+        int ebcdicCode = EBCDIC.encode(String.valueOf(second)).get(0) & 0xff;
+        return first + String.format("%03d", ebcdicCode);
     }
 
     private static String normalized(String status) {
