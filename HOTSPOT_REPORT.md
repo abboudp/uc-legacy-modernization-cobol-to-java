@@ -282,12 +282,12 @@ Useful early to build pipeline and test-harness confidence with almost no busine
 
 | Program | Score | Why it is easy |
 | :------ | ----: | :------------- |
-| `COBSWAIT` | 0.00 | 13 LOC, one `CALL 'MVSWAIT'` (`app/cbl/COBSWAIT.cbl:38`). In a modernized scheduler it disappears entirely |
+| `COBSWAIT` | 0.00 | 13 LOC, one `CALL 'MVSWAIT'` (`app/cbl/COBSWAIT.cbl:38`) into HLASM (`app/asm/MVSWAIT.asm:17`). In a modernized scheduler it disappears entirely, assembler included |
 | `CBACT02C`, `CBACT03C`, `CBCUS01C` | 0.59 | ~130 LOC each, 1 copybook, 1 file, read-and-print. Ideal first conversions and ideal record-layout regression tests for `CVACT02Y`, `CVACT03Y`, `CVCUS01Y` |
 | `CSUTLDTC` | 0.29 | 114 LOC, no copybooks; becomes a one-method date service (see Wave 1) |
 | `COPAUS2C` | 0.71 | 201 LOC, 1 copybook, 2 SQL statements, 3 conditions — the smallest Db2 program, a good pilot for the SQL conversion pattern |
 | `COUSR01C` | 1.27 | 198 LOC, 7 conditions; simplest CRUD screen, a good pilot for the Wave 1 navigation framework |
-| `CBACT01C` | 1.12 | 358 LOC, but note it `CALL`s `COBDATFT` (`app/cbl/CBACT01C.cbl:231`), which **does not exist in this repository** — resolve or stub that before using this program as a baseline |
+| `CBACT01C` | 1.12 | 358 LOC, but note it `CALL`s `COBDATFT` (`app/cbl/CBACT01C.cbl:231`), which is **HLASM, not COBOL** (`app/asm/COBDATFT.asm:17`) — that date formatter has to be reimplemented by hand rather than translated |
 
 ### What the metrics say overall
 

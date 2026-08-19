@@ -37,6 +37,11 @@ copybooks (`DFHAID`, `DFHBMSCA`, `CMQV`, …) are external; both are listed in t
 column because they appear in `COPY` statements, but they are outside the copybook analysis scope of
 `DATA_DICTIONARY.md`.
 
+Two callees are **not COBOL** and therefore have no row in the program tables, but they are part of the
+executable estate: `app/asm/COBDATFT.asm:17` (date formatter called from `app/cbl/CBACT01C.cbl:231`, with
+`app/cpy/CODATECN.cpy` as its interface) and `app/asm/MVSWAIT.asm:17` (timer called from
+`app/cbl/COBSWAIT.cbl:38`, using macro `app/maclib/ASMWAIT.mac`).
+
 ## 1. Core programs — `app/cbl/`
 
 ### 1.1 Batch programs

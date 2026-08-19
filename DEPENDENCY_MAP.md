@@ -24,7 +24,8 @@ Every edge below cites `path:line`.
 Navigation is almost entirely CICS `XCTL` with the `CARDDEMO-COMMAREA` (`app/cpy/COCOM01Y.cpy:19`) as the
 only state carrier: there is **exactly one** `EXEC CICS LINK` between application programs
 (`COPAUS1C.cbl:248`) and only three application-to-application plain `CALL` relationships
-(`CBSTM03A`→`CBSTM03B`, `CORPT00C`/`COTRN02C`→`CSUTLDTC`, `CBACT01C`→`COBDATFT`).
+(`CBSTM03A`→`CBSTM03B`, `CORPT00C`/`COTRN02C`→`CSUTLDTC`, `CBACT01C`→`COBDATFT`, the last of which
+leaves COBOL for assembler — `app/asm/COBDATFT.asm:17`).
 
 ```mermaid
 graph TD
@@ -114,7 +115,7 @@ graph TD
     CBSTM03B["CBSTM03B statement file I-O subprogram"]
     CSUTLDTC["CSUTLDTC date validation subprogram"]
     CBACT01C["CBACT01C account extract batch"]
-    COBDATFT["COBDATFT date format subprogram not in repo"]
+    COBDATFT["COBDATFT date format subprogram assembler"]
 
     CBSTM03A -->|"CALL"| CBSTM03B
     CORPT00C -->|"CALL"| CSUTLDTC
@@ -213,7 +214,7 @@ COBOL call.
 | `COPAUS1C` | `COPAUS0C` | XCTL | `app/app-authorization-ims-db2-mq/cbl/COPAUS1C.cbl:168`, `:185`, `:368` | `WS-PGM-AUTH-SMRY`, `VALUE 'COPAUS0C'` (`:34`) |
 | `COPAUS1C` | `COPAUS2C` | **LINK** | `app/app-authorization-ims-db2-mq/cbl/COPAUS1C.cbl:248`–`:252` | `PROGRAM(WS-PGM-AUTH-FRAUD)`, `VALUE 'COPAUS2C'` (`:35`); `COMMAREA(WS-FRAUD-DATA)`, `NOHANDLE`, result checked via `WS-FRD-UPDT-SUCCESS` (`:253`–`:254`). The only synchronous call-and-return between application programs |
 | `CBSTM03A` | `CBSTM03B` | CALL | `app/cbl/CBSTM03A.CBL:351`, `:377`, `:401`, `:734`, `:746`, `:769`, `:787`, `:805`, `:835`, `:860`, `:877`, `:893`, `:909` | `CALL 'CBSTM03B' USING WS-M03B-AREA` — 13 call sites, all literal. `CBSTM03B` is a hand-written file-I/O layer (open/read/close driven by a request code in the shared area) |
-| `CBACT01C` | `COBDATFT` | CALL | `app/cbl/CBACT01C.cbl:231` | `CALL 'COBDATFT' USING CODATECN-REC` — literal, but **`COBDATFT` does not exist in this repository**; only its interface copybook `app/cpy/CODATECN.cpy` does. An unresolved external at link time |
+| `CBACT01C` | `COBDATFT` | CALL | `app/cbl/CBACT01C.cbl:231` | `CALL 'COBDATFT' USING CODATECN-REC` — literal. The callee is **HLASM, not COBOL** (`app/asm/COBDATFT.asm:17`), with `app/cpy/CODATECN.cpy` as the interface; a rewrite must reimplement it from the assembler source |
 
 ## 4. External and system dependencies
 
@@ -225,7 +226,7 @@ Not application programs, but they constrain any rewrite:
 | `MQOPEN`, `MQGET`, `MQPUT`, `MQPUT1`, `MQCLOSE` | IBM MQ API | `app/app-authorization-ims-db2-mq/cbl/COPAUA0C.cbl:262`, `:400`, `:758`, `:956`; `app/app-vsam-mq/cbl/CODATE01.cbl:182`, `:216`, `:251`, `:301`, `:383`, `:420`, `:461`, `:483`, `:506`; `app/app-vsam-mq/cbl/COACCT01.cbl:233`, `:267`, `:302`, `:352`, `:479`, `:516`, `:557`, `:579`, `:602` |
 | `CEEDAYS` | Language Environment date service | `app/cbl/CSUTLDTC.cbl:116` — the leaf of every date validation in the application |
 | `CEE3ABD` | LE abend service | `CBACT01C.cbl:410`, `CBACT02C.cbl:158`, `CBACT03C.cbl:158`, `CBACT04C.cbl:632`, `CBCUS01C.cbl:158`, `CBTRN01C.cbl:473`, `CBTRN02C.cbl:711`, `CBTRN03C.cbl:630`, `CBSTM03A.CBL:923`, `CBEXPORT.cbl:579`, `CBIMPORT.cbl:484` — the uniform batch failure path |
-| `MVSWAIT` | MVS wait service | `app/cbl/COBSWAIT.cbl:38` |
+| `MVSWAIT` | MVS wait service, HLASM (`app/asm/MVSWAIT.asm:17`, macro `app/maclib/ASMWAIT.mac`) | `app/cbl/COBSWAIT.cbl:38` |
 | `DSNTIAC` | Db2 message formatter | `app/app-transaction-type-db2/cpy/CSDB2RPY.cpy:57`, copied into `COTRTLIC`, `COTRTUPC` and `COBTUPDT` |
 | Db2 plan `CARDDEMO` | Db2 | `app/app-transaction-type-db2/jcl/MNTTRDB2.jcl:30` (`RUN PROGRAM(COBTUPDT) PLAN(CARDDEMO)`) |
 | PSB `PSBPAUTB` / `PAUTBUNL` / `DLIGSAMP` | IMS | `app/app-authorization-ims-db2-mq/jcl/CBPAUP0J.jcl:24`, `UNLDPADB.JCL:38`, `UNLDGSAM.JCL:26` |
@@ -463,6 +464,8 @@ Where the two disagree, the JCL is authoritative: it is what runs.
 5. **`CARDXREF` is the hub**: it is an input to `CBTRN02C`, `CBACT04C`, `CBTRN03C`, `CBSTM03A`, `CBEXPORT`
    and to nearly every online screen, and `CBACT04C` needs both the KSDS and its alternate-index path
    (`app/jcl/INTCALC.jcl:29`, `:31`). It should be modelled first and kept a single source of truth.
-6. **Two unresolved edges** are worth fixing before any conversion baseline: the missing `COBDATFT`
-   (`app/cbl/CBACT01C.cbl:231`) and the missing `CARDOUT` DD in `app/jcl/CBIMPORT.jcl` for
+6. **Two edges leave the COBOL estate entirely**: `CBACT01C` → `COBDATFT` (`app/cbl/CBACT01C.cbl:231`) and
+   `COBSWAIT` → `MVSWAIT` (`app/cbl/COBSWAIT.cbl:38`) both land in HLASM (`app/asm/COBDATFT.asm:17`,
+   `app/asm/MVSWAIT.asm:17`), so no COBOL-to-Java translator can carry them across — they must be
+   reimplemented by hand. Separately, `app/jcl/CBIMPORT.jcl` has no `CARDOUT` DD for
    `app/cbl/CBIMPORT.cbl:63`.
