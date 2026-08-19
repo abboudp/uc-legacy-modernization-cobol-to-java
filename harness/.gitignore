@@ -1,0 +1,7 @@
+build/
+converted/
+run/
+*.bdb
+*.idx
+*.dat
+*.log

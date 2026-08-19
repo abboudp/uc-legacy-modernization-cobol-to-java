@@ -1,0 +1,52 @@
+       >>SOURCE FORMAT FREE
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. EBCDIC-SEQUENTIAL-LOADER.
+       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT INPUT-FILE ASSIGN TO INFILE
+                  ORGANIZATION IS SEQUENTIAL
+                  FILE STATUS IS INPUT-STATUS.
+           SELECT OUTPUT-FILE ASSIGN TO OUTFILE
+                  ORGANIZATION IS SEQUENTIAL
+                  FILE STATUS IS OUTPUT-STATUS.
+       DATA DIVISION.
+       FILE SECTION.
+       FD INPUT-FILE.
+       01 INPUT-RECORD PIC X(__RECORD_SIZE__).
+       FD OUTPUT-FILE.
+       01 OUTPUT-RECORD PIC X(__RECORD_SIZE__).
+       WORKING-STORAGE SECTION.
+       COPY EBCDIC-TABLE.
+       01 INPUT-STATUS PIC XX.
+       01 OUTPUT-STATUS PIC XX.
+       01 INPUT-EOF PIC X VALUE 'N'.
+       01 BYTE-INDEX PIC 9(4) COMP.
+       01 TABLE-INDEX PIC 9(4) COMP.
+       PROCEDURE DIVISION.
+           OPEN INPUT INPUT-FILE
+                OUTPUT OUTPUT-FILE
+           IF INPUT-STATUS NOT = '00' OR OUTPUT-STATUS NOT = '00'
+               DISPLAY 'LOADER OPEN FAILED ' INPUT-STATUS ' ' OUTPUT-STATUS
+               GOBACK RETURNING 12
+           END-IF
+           PERFORM UNTIL INPUT-EOF = 'Y'
+               READ INPUT-FILE
+                   AT END MOVE 'Y' TO INPUT-EOF
+                   NOT AT END
+                       PERFORM VARYING BYTE-INDEX FROM 1 BY 1
+                           UNTIL BYTE-INDEX > __RECORD_SIZE__
+                           MOVE FUNCTION ORD(INPUT-RECORD(BYTE-INDEX:1))
+                             TO TABLE-INDEX
+                           MOVE EBCDIC-TO-ASCII(TABLE-INDEX:1)
+                             TO OUTPUT-RECORD(BYTE-INDEX:1)
+                       END-PERFORM
+                       WRITE OUTPUT-RECORD
+                       IF OUTPUT-STATUS NOT = '00'
+                           DISPLAY 'LOADER WRITE FAILED ' OUTPUT-STATUS
+                           GOBACK RETURNING 12
+                       END-IF
+               END-READ
+           END-PERFORM
+           CLOSE INPUT-FILE OUTPUT-FILE
+           GOBACK.

@@ -1,0 +1,30 @@
+name: Migration tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  legacy-cobol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GnuCOBOL
+        run: sudo apt-get install -y gnucobol3
+      - name: Run legacy COBOL golden masters
+        run: harness/run.sh --legacy
+
+  modernized-java:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Run modernized Java tests
+        run: harness/run.sh --java
