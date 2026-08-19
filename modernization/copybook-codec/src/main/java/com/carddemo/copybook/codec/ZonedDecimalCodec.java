@@ -26,11 +26,7 @@ public final class ZonedDecimalCodec {
         EbcdicCodec.checkRange(bytes, offset, digitCount);
         StringBuilder digits = new StringBuilder(digitCount);
         for (int i = 0; i < digitCount; i++) {
-            int value = Byte.toUnsignedInt(bytes[offset + i]);
-            if ((value & 0xF0) != 0xF0 || value > 0xF9) {
-                throw invalidDigit(value, offset + i, "F0-F9");
-            }
-            digits.append((char) ('0' + (value & 0x0F)));
+            digits.append((char) ('0' + decodeHighOrderDigit(bytes, offset + i)));
         }
         return digits.toString();
     }
@@ -42,11 +38,7 @@ public final class ZonedDecimalCodec {
         EbcdicCodec.checkRange(bytes, offset, digitCount);
         StringBuilder digits = new StringBuilder(digitCount);
         for (int i = 0; i < digitCount - 1; i++) {
-            int value = Byte.toUnsignedInt(bytes[offset + i]);
-            if ((value & 0xF0) != 0xF0 || value > 0xF9) {
-                throw invalidDigit(value, offset + i, "F0-F9");
-            }
-            digits.append((char) ('0' + (value & 0x0F)));
+            digits.append((char) ('0' + decodeHighOrderDigit(bytes, offset + i)));
         }
 
         int low = Byte.toUnsignedInt(bytes[offset + digitCount - 1]);
@@ -114,5 +106,13 @@ public final class ZonedDecimalCodec {
         return new CopybookCodecException(
                 String.format("Invalid zoned-decimal byte 0x%02X at offset %d (expected %s)",
                         value, offset, expected));
+    }
+
+    private static int decodeHighOrderDigit(byte[] bytes, int offset) {
+        int value = Byte.toUnsignedInt(bytes[offset]);
+        if (value < 0xF0 || value > 0xF9) {
+            throw invalidDigit(value, offset, "F0-F9");
+        }
+        return value & 0x0F;
     }
 }

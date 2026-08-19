@@ -1,7 +1,5 @@
 package com.carddemo.copybook.codec;
 
-import java.math.BigDecimal;
-
 public final class TransactionCategoryBalanceCodec {
     public static final int RECORD_LENGTH = 50;
 

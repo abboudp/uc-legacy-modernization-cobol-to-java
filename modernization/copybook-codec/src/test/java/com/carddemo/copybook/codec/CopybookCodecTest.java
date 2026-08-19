@@ -30,18 +30,11 @@ class CopybookCodecTest {
 
         assertEquals(7, image.length / TransactionTypeCodec.RECORD_LENGTH);
         assertEquals(7, records.size());
-        byte[] rebuilt = records.stream()
-                .map(record -> TransactionTypeCodec.encode(TransactionTypeCodec.decode(record, 0)))
-                .flatMapToInt(record -> java.util.stream.IntStream.range(0, record.length)
-                        .map(index -> Byte.toUnsignedInt(record[index])))
-                .collect(() -> new java.io.ByteArrayOutputStream(), (out, value) -> out.write(value),
-                        (left, right) -> {
-                            try {
-                                right.writeTo(left);
-                            } catch (java.io.IOException exception) {
-                                throw new AssertionError(exception);
-                            }
-                        }).toByteArray();
+        byte[] rebuilt = new byte[image.length];
+        for (int i = 0; i < records.size(); i++) {
+            byte[] encoded = TransactionTypeCodec.encode(TransactionTypeCodec.decode(records.get(i), 0));
+            System.arraycopy(encoded, 0, rebuilt, i * TransactionTypeCodec.RECORD_LENGTH, encoded.length);
+        }
         assertArrayEquals(image, rebuilt);
     }
 
