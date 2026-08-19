@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install GnuCOBOL
-        run: sudo apt-get install -y gnucobol3
+        run: sudo apt-get update && sudo apt-get install -y gnucobol3
       - name: Run legacy COBOL golden masters
         run: harness/run.sh --legacy
 
